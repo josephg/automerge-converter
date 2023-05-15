@@ -1,5 +1,5 @@
 [package]
-name = "automerge-test"
+name = "automerge-converter"
 version = "0.1.0"
 edition = "2021"
 
