@@ -14,9 +14,8 @@ use smartstring::alias::String as SmartString;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EditHistory {
-    start_content: SmartString,
+    num_agents: usize,
     end_content: String,
-
     txns: Vec<HistoryEntry>,
 }
 
@@ -26,12 +25,11 @@ pub struct SimpleTextOp(usize, usize, SmartString); // pos, del_len, ins_content
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryEntry {
-    id: usize,
     parents: SmallVec<[usize; 2]>,
     num_children: usize,
-    agent: String,
+    agent: usize,
     // op: TextOperation,
-    ops: SmallVec<[SimpleTextOp; 2]>,
+    patches: SmallVec<[SimpleTextOp; 2]>,
 }
 
 
@@ -43,14 +41,12 @@ fn gen_main() -> Result<(), Box<dyn Error>> {
     // dbg!(&doc.get_heads());
 
     // let filename = "example_trace.json";
-    let filename = "node_nodecc.json";
+    let filename = "friendsforever.json";
     // let filename = "git_makefile.json";
 
     let file = BufReader::new(File::open(filename)?);
     let history: EditHistory = serde_json::from_reader(file)?;
     // dbg!(data);
-
-    assert!(history.start_content.is_empty()); // 'cos I'm not handling this for now.
 
     // There should be exactly one entry with no parents.
     let num_roots = history.txns.iter().filter(|e| e.parents.is_empty()).count();
@@ -78,7 +74,7 @@ fn gen_main() -> Result<(), Box<dyn Error>> {
     // doc_at_idx.insert(usize::MAX)
 
     // let mut root = Some(doc);
-    for entry in history.txns.iter() {
+    for (idx, entry) in history.txns.iter().enumerate() {
         // First we need to get the doc we're editing.
         let (&first_p, rest_p) = entry.parents.split_first().unwrap_or((&usize::MAX, &[]));
 
@@ -105,7 +101,7 @@ fn gen_main() -> Result<(), Box<dyn Error>> {
 
 
         // Ok, now modify the document.
-        for op in &entry.ops {
+        for op in &entry.patches {
             doc.splice_text(text_id.clone(), op.0, op.1, &op.2).unwrap();
         }
 
@@ -113,7 +109,7 @@ fn gen_main() -> Result<(), Box<dyn Error>> {
 
         // And deposit the result back into doc_at_idx.
         if entry.num_children > 0 {
-            doc_at_idx.insert(entry.id, (doc, entry.num_children));
+            doc_at_idx.insert(idx, (doc, entry.num_children));
         } else {
             println!("done!");
             let result = doc.text(text_id.clone()).unwrap();
@@ -133,7 +129,7 @@ fn gen_main() -> Result<(), Box<dyn Error>> {
 }
 
 fn bench_process(c: &mut Criterion) {
-    let name = "node_nodecc";
+    let name = "friendsforever";
     let filename = format!("{name}.json.am");
 
     c.bench_function(&format!("process_remote_edits/{name}"), |b| {
@@ -159,5 +155,8 @@ fn bench_main() {
 
 fn main() {
     gen_main().unwrap();
+
+    // To benchmark, uncomment this line and run with:
+    // cargo run --release -- --bench
     // bench_main();
 }
